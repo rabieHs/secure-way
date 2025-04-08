@@ -66,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       print('Login successful: ${userCredential.user?.email}');
 
                       DocumentSnapshot? userData = await _authService
-                          .getUserById(userCredential.user!.uid);
+                          .getUserDocById(userCredential.user!.uid);
                       if (userData != null && userData.exists) {
                         UserModel userModel = UserModel.fromJson(
                             userData.data() as Map<String, dynamic>);

@@ -35,7 +35,8 @@ class RequestsTabState extends State<RequestsTab> {
   }
 
   Future<void> _loadUserId() async {
-    User? currentUser = await _authService.getCurrentUser();
+    User? currentUser =
+        await _authService.getCurrentFirebaseUser(); // Updated function name
     if (currentUser != null) {
       setState(() {
         _userId = currentUser.uid;
@@ -239,7 +240,8 @@ class RequestsTabState extends State<RequestsTab> {
                 double? latitude = _latitude;
                 double? longitude = _longitude;
 
-                User? currentUser = await _authService.getCurrentUser();
+                User? currentUser = await _authService
+                    .getCurrentFirebaseUser(); // Updated function name
                 if (currentUser == null) {
                   // ignore: avoid_print
                   print('No current user found');

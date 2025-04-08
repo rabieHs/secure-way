@@ -1,6 +1,7 @@
 // lib/services/request_services.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
+import 'package:geolocator/geolocator.dart'; // Import geolocator
 import '../models/request_model.dart';
 import '../models/location_model.dart';
 import 'sos_location_service.dart'; // Import SosLocationService
@@ -44,23 +45,29 @@ class RequestService {
     }
   }
 
-  Stream<List<Request>> getSosRequests() {
+  // Renamed getSosRequests to getNearbyRequestsByType and added requestType parameter
+  Stream<List<Request>> getNearbyRequestsByType(RequestType requestType,
+      double currentLatitude, double currentLongitude) {
     return _firestore
         .collection('requests')
-        .where('requestType', isEqualTo: RequestType.sos.name)
+        .where('requestType',
+            isEqualTo: requestType.name) // Use the passed requestType
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => Request.fromJson(doc.data())).toList();
-    });
-  }
-
-  Stream<List<Request>> getRequestsByUserId(String userId) {
-    return _firestore
-        .collection('requests')
-        .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => Request.fromJson(doc.data())).toList();
+      List<Request> allSosRequests =
+          snapshot.docs.map((doc) => Request.fromJson(doc.data())).toList();
+      List<Request> nearbyRequests = allSosRequests.where((request) {
+        // Calculate distance
+        double distanceInMeters = Geolocator.distanceBetween(
+          currentLatitude,
+          currentLongitude,
+          request.location.latitude,
+          request.location.longitude,
+        );
+        // Filter by 25km (25000 meters)
+        return distanceInMeters <= 25000;
+      }).toList();
+      return nearbyRequests;
     });
   }
 

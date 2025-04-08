@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart'; // Import firebase_auth
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:secure_way_client/firebase_options.dart';
+import 'package:secure_way_client/sos/interfaces/home_mechanic.dart';
 import 'authentification/interfaces/login.dart';
 import 'authentification/interfaces/register.dart';
 import 'services/authentication_services.dart';
@@ -35,7 +36,7 @@ class AuthenticationWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<User?>(
-      future: _authService.getCurrentUser(),
+      future: _authService.getCurrentFirebaseUser(),
       builder: (BuildContext context, AsyncSnapshot<User?> snapshot) {
         print('Connection state active: ${snapshot.connectionState}');
         if (snapshot.connectionState == ConnectionState.done) {
@@ -46,7 +47,7 @@ class AuthenticationWrapper extends StatelessWidget {
           } else {
             // User is logged in, navigate to home screen based on user type
             return FutureBuilder<DocumentSnapshot?>(
-              future: _authService.getUserById(user.uid),
+              future: _authService.getUserDocById(user.uid),
               builder: (BuildContext context,
                   AsyncSnapshot<DocumentSnapshot?> userSnapshot) {
                 if (userSnapshot.connectionState == ConnectionState.done &&
@@ -55,10 +56,13 @@ class AuthenticationWrapper extends StatelessWidget {
                   UserModel userModel = UserModel.fromJson(
                       userSnapshot.data!.data() as Map<String, dynamic>);
                   String userType = userModel.userType;
+                  print('User type: $userType');
                   if (userType == 'driver') {
                     return DriverHomeScreen();
                   } else if (userType == 'sos') {
                     return SosHomeScreen();
+                  } else if (userType == 'mechanic') {
+                    return MechanicHomeScreen();
                   } else {
                     // Default case or error handling
                     return LoginScreen();
