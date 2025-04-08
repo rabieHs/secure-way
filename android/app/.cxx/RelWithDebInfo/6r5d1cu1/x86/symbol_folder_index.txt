@@ -1,0 +1,1 @@
+/Users/Apple/AndroidStudioProjects/secure_way_client/build/app/intermediates/cxx/RelWithDebInfo/6r5d1cu1/obj/x86

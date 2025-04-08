@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "98544235255",
+    "project_id": "way-6a560",
+    "storage_bucket": "way-6a560.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:98544235255:android:e796b9fd0e0b3ba26459f2",
+        "android_client_info": {
+          "package_name": "com.example.secure_way_client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBEJsi_8axEQY_V_ll8wwp6zTRdKbLf4ew"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,2 @@
+/Users/Apple/AndroidStudioProjects/secure_way_client/android/app/.cxx/RelWithDebInfo/6r5d1cu1/x86/CMakeFiles/edit_cache.dir
+/Users/Apple/AndroidStudioProjects/secure_way_client/android/app/.cxx/RelWithDebInfo/6r5d1cu1/x86/CMakeFiles/rebuild_cache.dir
