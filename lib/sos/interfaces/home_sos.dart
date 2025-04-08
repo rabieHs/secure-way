@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:secure_way_client/driver/interfaces/profile_tab.dart';
 import 'package:secure_way_client/services/authentication_services.dart';
 import 'package:secure_way_client/services/request_services.dart';
 import 'package:secure_way_client/services/sos_location_service.dart';
-import '../../models/request_model.dart'; // Import RequestType enum
+import '../../models/request_model.dart';
 import '../../models/user_model.dart';
+import 'dart:async';
+
+// Add this constant at the top of your file
+const String GOOGLE_API_KEY =
+    "AIzaSyAGf0VB5bufPCJpUGbbteig5_yXRoJafqo"; // Replace with your API key
 
 class SosHomeScreen extends StatefulWidget {
   final UserModel? user;
@@ -18,87 +25,35 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
   int _selectedIndex = 0;
   final RequestService _requestService = RequestService();
   final SosLocationService _sosLocationService = SosLocationService();
+  final PolylinePoints _polylinePoints = PolylinePoints();
 
   double? _driverLatitude;
   double? _driverLongitude;
   String _currentLocationText = 'Locating...';
   bool _locationStreamInitialized = false;
-  Stream<List<Request>>?
-      _nearbySosRequestStream; // Add state variable for the stream
+  Stream<List<Request>>? _nearbySosRequestStream;
 
-  List<Widget> get _widgetOptions => <Widget>[
-        Column(
-          key: ValueKey(_currentLocationText),
-          children: [
-            SafeArea(
-              child: RepaintBoundary(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    'SOS Current Location: $_currentLocationText',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: StreamBuilder<List<Request>>(
-                stream:
-                    _nearbySosRequestStream, // Use the state stream variable
-                builder: (context, snapshot) {
-                  // Handle initial null stream or waiting state
-                  if (_nearbySosRequestStream == null ||
-                      snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(
-                        child: _driverLatitude == null
-                            ? const Text("Waiting for location...")
-                            : const CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
-                  }
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text('No SOS requests found.'));
-                  }
-
-                  List<Request> sosRequests = snapshot.data!;
-
-                  return ListView.builder(
-                    itemCount: sosRequests.length,
-                    itemBuilder: (context, index) {
-                      Request request = sosRequests[index];
-                      return ListTile(
-                        title: Text('SOS Request ID: ${request.id}'),
-                        subtitle:
-                            Text('Location: ${request.location.placeName}'),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-        ProfileTab(user: widget.user),
-      ];
+  // Google Maps related variables
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
+  Map<PolylineId, Polyline> _polylines = {};
+  Request? _selectedRequest;
+  bool _routeDisplayed = false;
+  List<LatLng> _routeCoordinates = [];
+  Timer? _routeUpdateTimer;
 
   @override
   void initState() {
     super.initState();
-    // Initialize location stream only once
     if (!_locationStreamInitialized) {
       _initLocationStream();
       _locationStreamInitialized = true;
     }
-    // Optionally initialize stream here if default coords are known,
-    // otherwise it will be initialized on first location update.
   }
 
   void _initLocationStream() {
     _sosLocationService.locationStream.listen((locationData) async {
       print("location data: $locationData");
-      // Use local variables for null safety check before updating stream
       double? newLat = locationData['latitude'];
       double? newLng = locationData['longitude'];
       String newAddress = locationData['address'] ?? 'Location unavailable';
@@ -106,46 +61,349 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
           await AuthenticationService().getCurrentUserModel();
 
       if (newLat != null && newLng != null) {
-        // Check if location actually changed to avoid unnecessary stream updates
-        if (newLat != _driverLatitude || newLng != _driverLongitude) {
+        bool locationChanged = newLat != _driverLatitude ||
+            newLng != _driverLongitude ||
+            _driverLatitude == null;
+
+        setState(() {
+          _currentLocationText = newAddress;
+          _driverLatitude = newLat;
+          _driverLongitude = newLng;
+        });
+
+        if (locationChanged) {
+          RequestType currentRequestType = _getRequestTypeFromUser(user);
+          print("current request type: $currentRequestType");
+
+          // Update the stream with the new location and determined types
           setState(() {
-            _currentLocationText = newAddress;
-            _driverLatitude = newLat;
-            _driverLongitude = newLng;
-
-            // Determine RequestType based on userType
-
-            RequestType currentRequestType = _getRequestTypeFromUser(user);
-
-            print("current request type: $currentRequestType");
-
-            // Update the stream with the new location and determined types
             _nearbySosRequestStream = _requestService.getNearbyRequestsByType(
                 currentRequestType, _driverLatitude!, _driverLongitude!);
           });
-        } else if (_currentLocationText != newAddress) {
-          // Update address even if lat/lng are the same
-          setState(() {
-            _currentLocationText = newAddress;
-          });
+
+          // Move camera to current location on first load
+          if (_mapController != null &&
+              (_driverLatitude != null && _driverLongitude != null) &&
+              !_routeDisplayed) {
+            _mapController!.animateCamera(
+              CameraUpdate.newCameraPosition(
+                CameraPosition(
+                  target: LatLng(_driverLatitude!, _driverLongitude!),
+                  zoom: 14.0,
+                ),
+              ),
+            );
+          }
+
+          // Update polyline if we have a selected request and route is being displayed
+          if (_selectedRequest != null && _routeDisplayed) {
+            _getRouteToSelectedRequest();
+          }
         }
-      } else {
-        // Handle case where location data is incomplete
-        setState(() {
-          _currentLocationText =
-              newAddress; // Still update address if available
-        });
       }
     });
   }
 
-  // Helper function to determine RequestType from UserModel
+  void _updateMarkers(List<Request> requests) {
+    Set<Marker> newMarkers = {};
+
+    // Add a marker for the current location (driver/user)
+    if (_driverLatitude != null && _driverLongitude != null) {
+      newMarkers.add(
+        Marker(
+          markerId: const MarkerId('current_location'),
+          position: LatLng(_driverLatitude!, _driverLongitude!),
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          infoWindow: const InfoWindow(title: 'Your Location'),
+        ),
+      );
+    }
+
+    // Add markers for each request
+    for (var request in requests) {
+      newMarkers.add(
+        Marker(
+          markerId: MarkerId(request.id),
+          position:
+              LatLng(request.location.latitude, request.location.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          infoWindow: InfoWindow(
+            title: 'SOS Request',
+            snippet: request.location.placeName ?? 'No address available',
+          ),
+          onTap: () {
+            setState(() {
+              _selectedRequest = request;
+              _showRequestDetailsBottomSheet(request);
+            });
+          },
+        ),
+      );
+    }
+
+    setState(() {
+      _markers = newMarkers;
+    });
+  }
+
+  void _showRequestDetailsBottomSheet(Request request) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.3,
+          minChildSize: 0.2,
+          maxChildSize: 0.5,
+          expand: false,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'SOS Request Details',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 10),
+                    _buildDetailRow('ID:', request.id),
+                    _buildDetailRow(
+                        'Location:', request.location.placeName ?? 'N/A'),
+                    _buildDetailRow('Description:', request.description),
+                    _buildDetailRow('Status:', request.status.name),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _acceptRequest(request);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Accept Request'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(value),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _acceptRequest(Request request) {
+    setState(() {
+      _selectedRequest = request;
+      _routeDisplayed = true;
+    });
+
+    _getRouteToSelectedRequest();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Request accepted - navigating to location'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    // TODO: Update request status in Firestore
+    // You would call a method on your RequestService here
+
+    // Set up a timer to periodically update the route as the user moves
+    // This is optional but can provide a better experience
+    _routeUpdateTimer?.cancel();
+    _routeUpdateTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (_routeDisplayed && _selectedRequest != null) {
+        _getRouteToSelectedRequest();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _getRouteToSelectedRequest() async {
+    if (_selectedRequest == null ||
+        _driverLatitude == null ||
+        _driverLongitude == null) {
+      return;
+    }
+
+    try {
+      // Get route points from Google Directions API
+      PolylineResult result = await _polylinePoints.getRouteBetweenCoordinates(
+        request: PolylineRequest(
+            origin: PointLatLng(_driverLatitude!, _driverLongitude!),
+            destination: PointLatLng(_selectedRequest!.location.latitude,
+                _selectedRequest!.location.longitude),
+            mode: TravelMode.driving),
+        googleApiKey: GOOGLE_API_KEY,
+      );
+
+      if (result.points.isNotEmpty) {
+        _routeCoordinates = result.points
+            .map((point) => LatLng(point.latitude, point.longitude))
+            .toList();
+
+        // Create or update the polyline
+        final String polylineIdVal = 'polyline_${_selectedRequest!.id}';
+        final PolylineId polylineId = PolylineId(polylineIdVal);
+
+        final Polyline polyline = Polyline(
+          polylineId: polylineId,
+          color: Colors.blue,
+          width: 5,
+          points: _routeCoordinates,
+        );
+
+        setState(() {
+          _polylines[polylineId] = polyline;
+        });
+
+        // Adjust camera to show the route
+        _adjustCameraToShowRoute();
+      } else {
+        print("Failed to get route points: ${result.errorMessage}");
+        // Fallback to direct line if route cannot be found
+        _createDirectPolyline();
+      }
+    } catch (e) {
+      print("Error getting route: $e");
+      // Fallback to direct line
+      _createDirectPolyline();
+    }
+  }
+
+  void _createDirectPolyline() {
+    if (_selectedRequest == null ||
+        _driverLatitude == null ||
+        _driverLongitude == null) {
+      return;
+    }
+
+    final String polylineIdVal = 'polyline_${_selectedRequest!.id}';
+    final PolylineId polylineId = PolylineId(polylineIdVal);
+
+    // Create a direct line between the two points as fallback
+    final Polyline polyline = Polyline(
+      polylineId: polylineId,
+      color: Colors.red, // Different color to indicate it's a direct line
+      width: 5,
+      points: [
+        LatLng(_driverLatitude!, _driverLongitude!),
+        LatLng(_selectedRequest!.location.latitude,
+            _selectedRequest!.location.longitude),
+      ],
+    );
+
+    setState(() {
+      _polylines[polylineId] = polyline;
+    });
+
+    _adjustCameraToShowRoute();
+  }
+
+  void _adjustCameraToShowRoute() {
+    if (_mapController == null) return;
+
+    // Create bounds that include all points
+    LatLngBounds bounds;
+
+    if (_routeCoordinates.isNotEmpty) {
+      bounds = _createBoundsFromList(_routeCoordinates);
+    } else {
+      // Fallback if we only have start and end points
+      bounds = LatLngBounds(
+        southwest: LatLng(
+          _driverLatitude! < _selectedRequest!.location.latitude
+              ? _driverLatitude!
+              : _selectedRequest!.location.latitude,
+          _driverLongitude! < _selectedRequest!.location.longitude
+              ? _driverLongitude!
+              : _selectedRequest!.location.longitude,
+        ),
+        northeast: LatLng(
+          _driverLatitude! > _selectedRequest!.location.latitude
+              ? _driverLatitude!
+              : _selectedRequest!.location.latitude,
+          _driverLongitude! > _selectedRequest!.location.longitude
+              ? _driverLongitude!
+              : _selectedRequest!.location.longitude,
+        ),
+      );
+    }
+
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+  }
+
+  LatLngBounds _createBoundsFromList(List<LatLng> points) {
+    double? x0, x1, y0, y1;
+
+    for (LatLng point in points) {
+      if (x0 == null) {
+        x0 = x1 = point.latitude;
+        y0 = y1 = point.longitude;
+      } else {
+        if (point.latitude > x1!) x1 = point.latitude;
+        if (point.latitude < x0) x0 = point.latitude;
+        if (point.longitude > y1!) y1 = point.longitude;
+        if (point.longitude < y0!) y0 = point.longitude;
+      }
+    }
+
+    return LatLngBounds(
+      northeast: LatLng(x1!, y1!),
+      southwest: LatLng(x0!, y0!),
+    );
+  }
+
   RequestType _getRequestTypeFromUser(UserModel? user) {
-    // Default to mechanic if user or userType is null, or handle error as needed
     if (user == null || user.userType == null) {
       print(
           "Warning: User or userType is null, defaulting to mechanic requests.");
-      return RequestType.mechanic; // Or throw an error
+      return RequestType.mechanic;
     }
     switch (user.userType.toLowerCase()) {
       case 'sos':
@@ -155,7 +413,7 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
       default:
         print(
             "Warning: Unknown userType '${user.userType}', defaulting to mechanic requests.");
-        return RequestType.mechanic; // Default or throw error for unknown types
+        return RequestType.mechanic;
     }
   }
 
@@ -171,9 +429,49 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
       appBar: AppBar(
         title: const Text('SOS Home'),
       ),
-      body: Center(
-        child: _widgetOptions.elementAt(_selectedIndex),
-      ),
+      body: _selectedIndex == 0
+          ? Column(
+              children: [
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      'SOS Current Location: $_currentLocationText',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: StreamBuilder<List<Request>>(
+                    stream: _nearbySosRequestStream,
+                    builder: (context, snapshot) {
+                      if (_nearbySosRequestStream == null ||
+                          snapshot.connectionState == ConnectionState.waiting) {
+                        return Center(
+                          child: _driverLatitude == null
+                              ? const Text("Waiting for location...")
+                              : const CircularProgressIndicator(),
+                        );
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error: ${snapshot.error}'));
+                      }
+
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        // Still show the map even if there are no requests
+                        return _buildGoogleMap(const []);
+                      }
+
+                      List<Request> sosRequests = snapshot.data!;
+                      return _buildGoogleMap(sosRequests);
+                    },
+                  ),
+                ),
+              ],
+            )
+          : ProfileTab(user: widget.user),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -191,9 +489,36 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
     );
   }
 
+  Widget _buildGoogleMap(List<Request> requests) {
+    if (_driverLatitude == null || _driverLongitude == null) {
+      return const Center(child: Text("Waiting for location..."));
+    }
+
+    // Update markers whenever requests change
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateMarkers(requests);
+    });
+
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: LatLng(_driverLatitude!, _driverLongitude!),
+        zoom: 14.0,
+      ),
+      myLocationEnabled: true,
+      myLocationButtonEnabled: true,
+      markers: _markers,
+      polylines: Set<Polyline>.of(_polylines.values),
+      onMapCreated: (GoogleMapController controller) {
+        _mapController = controller;
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _mapController?.dispose();
     _sosLocationService.dispose();
+    _routeUpdateTimer?.cancel();
     super.dispose();
   }
 }
