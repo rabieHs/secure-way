@@ -50,6 +50,8 @@ class RequestService {
       double currentLatitude, double currentLongitude) {
     return _firestore
         .collection('requests')
+        .where("status",
+            isEqualTo: RequestStatus.pending.name) // Only get pending requests
         .where('requestType',
             isEqualTo: requestType.name) // Use the passed requestType
         .snapshots()
@@ -100,4 +102,30 @@ class RequestService {
     });
   }
   //TODO: add logic here to update status and delete sos location
+
+  Future<void> updateRequestStatus(
+      String requestId, RequestStatus status) async {
+    try {
+      await _firestore.collection('requests').doc(requestId).update({
+        'status': status.name,
+      });
+    } catch (e) {
+      print('Error updating request status: $e');
+      rethrow;
+    }
+  }
+
+  // Add new method to update request with response
+  Future<void> updateRequestWithResponse(
+      String requestId, String response) async {
+    try {
+      await _firestore.collection('requests').doc(requestId).update({
+        'status': RequestStatus.replied.name,
+        'response': response,
+      });
+    } catch (e) {
+      print('Error updating request with response: $e');
+      rethrow;
+    }
+  }
 }

@@ -3,7 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'location_model.dart';
 
-enum RequestStatus { pending, accepted, rejected, completed }
+enum RequestStatus { pending, accepted, rejected, completed, replied }
 
 enum RequestType { sos, mechanic }
 
@@ -15,6 +15,7 @@ class Request {
   final RequestStatus status;
   final String userId;
   final String description;
+  final String? response;
 
   Request({
     required this.id,
@@ -24,6 +25,7 @@ class Request {
     required this.status,
     required this.userId,
     required this.description,
+    this.response, // Add response to constructor
   });
 
   factory Request.fromJson(Map<String, dynamic> json) {

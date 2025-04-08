@@ -148,6 +148,12 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
   }
 
   void _showRequestDetailsBottomSheet(Request request) {
+    // Controller for the quick response text field
+    final TextEditingController quickResponseController =
+        TextEditingController();
+    // Flag to track if the user is providing a quick response
+    bool isProvidingQuickResponse = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -155,63 +161,150 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.3,
-          minChildSize: 0.2,
-          maxChildSize: 0.5,
-          expand: false,
-          builder: (context, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(2.5),
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.4, // Increased to accommodate the text field
+              minChildSize: 0.2,
+              maxChildSize: 0.6, // Increased for better UX when typing
+              expand: false,
+              builder: (context, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(2.5),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'SOS Request Details',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 10),
-                    _buildDetailRow('ID:', request.id),
-                    _buildDetailRow(
-                        'Location:', request.location.placeName ?? 'N/A'),
-                    _buildDetailRow('Description:', request.description),
-                    _buildDetailRow('Status:', request.status.name),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _acceptRequest(request);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).primaryColor,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        const SizedBox(height: 20),
+                        Text(
+                          'SOS Request Details',
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        child: const Text('Accept Request'),
-                      ),
+                        const SizedBox(height: 10),
+                        _buildDetailRow('ID:', request.id),
+                        _buildDetailRow(
+                            'Location:', request.location.placeName ?? 'N/A'),
+                        _buildDetailRow('Description:', request.description),
+                        _buildDetailRow('Status:', request.status.name),
+                        const SizedBox(height: 15),
+
+                        // Quick response toggle
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: isProvidingQuickResponse,
+                              onChanged: (value) {
+                                setModalState(() {
+                                  isProvidingQuickResponse = value ?? false;
+                                });
+                              },
+                            ),
+                            const Text(
+                              'Provide quick response without traveling',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+
+                        // Conditional quick response text field
+                        if (isProvidingQuickResponse) ...[
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: quickResponseController,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                              hintText: 'Enter your quick solution...',
+                              border: OutlineInputBorder(),
+                              labelText: 'Quick Response',
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              if (isProvidingQuickResponse) {
+                                _replyToRequest(
+                                    request, quickResponseController.text);
+                              } else {
+                                _acceptRequest(request);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).primaryColor,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                foregroundColor: Colors.white),
+                            child: Text(isProvidingQuickResponse
+                                ? 'Send Reply'
+                                : 'Accept Request'),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             );
           },
         );
       },
+    );
+  }
+
+  void _acceptRequest(Request request) {
+    setState(() {
+      _selectedRequest = request;
+      _routeDisplayed = true;
+    });
+
+    _getRouteToSelectedRequest();
+
+    // Update request status in Firestore
+    _requestService.updateRequestStatus(request.id, RequestStatus.accepted);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Request accepted - navigating to location'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    // Set up a timer to periodically update the route as the user moves
+    _routeUpdateTimer?.cancel();
+    _routeUpdateTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (_routeDisplayed && _selectedRequest != null) {
+        _getRouteToSelectedRequest();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  void _replyToRequest(Request request, String response) {
+    // Update request status and add response in Firestore
+    _requestService.updateRequestWithResponse(request.id, response);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Quick response sent to driver'),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 
@@ -232,36 +325,6 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
         ],
       ),
     );
-  }
-
-  void _acceptRequest(Request request) {
-    setState(() {
-      _selectedRequest = request;
-      _routeDisplayed = true;
-    });
-
-    _getRouteToSelectedRequest();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Request accepted - navigating to location'),
-        backgroundColor: Colors.green,
-      ),
-    );
-
-    // TODO: Update request status in Firestore
-    // You would call a method on your RequestService here
-
-    // Set up a timer to periodically update the route as the user moves
-    // This is optional but can provide a better experience
-    _routeUpdateTimer?.cancel();
-    _routeUpdateTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (_routeDisplayed && _selectedRequest != null) {
-        _getRouteToSelectedRequest();
-      } else {
-        timer.cancel();
-      }
-    });
   }
 
   Future<void> _getRouteToSelectedRequest() async {
