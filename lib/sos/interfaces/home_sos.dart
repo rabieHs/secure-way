@@ -5,6 +5,7 @@ import 'package:secure_way_client/driver/interfaces/profile_tab.dart';
 import 'package:secure_way_client/services/authentication_services.dart';
 import 'package:secure_way_client/services/request_services.dart';
 import 'package:secure_way_client/services/sos_location_service.dart';
+import 'package:secure_way_client/services/notification_service.dart';
 import '../../models/request_model.dart';
 import '../../models/user_model.dart';
 import 'dart:async';
@@ -98,10 +99,82 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
           // Update polyline if we have a selected request and route is being displayed
           if (_selectedRequest != null && _routeDisplayed) {
             _getRouteToSelectedRequest();
+
+            // Check if SOS has arrived at the driver's location
+            if (_selectedRequest!.status == RequestStatus.accepted) {
+              _checkIfArrivedAtDestination();
+            }
           }
         }
       }
     });
+  }
+
+  // Check if SOS has arrived at the destination and update status if needed
+  void _checkIfArrivedAtDestination() {
+    if (_selectedRequest == null ||
+        _driverLatitude == null ||
+        _driverLongitude == null) {
+      return;
+    }
+
+    // Use the notification service to check if arrived
+    final notificationService = NotificationService();
+    bool hasArrived = notificationService.hasArrivedAtDestination(
+        _driverLatitude!,
+        _driverLongitude!,
+        _selectedRequest!.location.latitude,
+        _selectedRequest!.location.longitude);
+
+    if (hasArrived) {
+      print('Arrived at destination! Updating request status...');
+
+      // Close navigation mode first (remove polylines and stop navigation)
+      _stopNavigation();
+
+      // Then update the request status to completed
+      _requestService.updateRequestStatus(
+          _selectedRequest!.id, RequestStatus.completed);
+
+      // Show notification to the user who made the request
+      notificationService.showStatusChangeNotification(_selectedRequest!);
+
+      // Show notification and update UI
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'You have arrived at the destination. Request marked as completed.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  // Stop navigation mode and clear polylines
+  void _stopNavigation() {
+    setState(() {
+      _routeDisplayed = false;
+      _polylines.clear();
+      _routeCoordinates.clear();
+      _selectedRequest = null;
+
+      // Force full map refresh and markers update
+      if (_mapController != null &&
+          _driverLatitude != null &&
+          _driverLongitude != null) {
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: LatLng(_driverLatitude!, _driverLongitude!),
+              zoom: 14.0,
+            ),
+          ),
+        );
+      }
+    });
+
+    // Cancel route update timer
+    _routeUpdateTimer?.cancel();
   }
 
   void _updateMarkers(List<Request> requests) {
@@ -120,26 +193,61 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
       );
     }
 
-    // Add markers for each request
+    // Add markers for each request - only show pending requests
     for (var request in requests) {
-      newMarkers.add(
-        Marker(
-          markerId: MarkerId(request.id),
-          position:
-              LatLng(request.location.latitude, request.location.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: InfoWindow(
-            title: 'SOS Request',
-            snippet: request.location.placeName ?? 'No address available',
+      // Only show pending requests on the map
+      if (request.status == RequestStatus.pending) {
+        newMarkers.add(
+          Marker(
+            markerId: MarkerId(request.id),
+            position:
+                LatLng(request.location.latitude, request.location.longitude),
+            icon:
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            infoWindow: InfoWindow(
+              title: 'SOS Request',
+              snippet: request.location.placeName ?? 'No address available',
+            ),
+            onTap: () {
+              setState(() {
+                _selectedRequest = request;
+                _showRequestDetailsBottomSheet(request);
+              });
+            },
           ),
-          onTap: () {
-            setState(() {
-              _selectedRequest = request;
-              _showRequestDetailsBottomSheet(request);
-            });
-          },
-        ),
-      );
+        );
+      }
+    }
+
+    // Make sure the selected request marker is always visible when navigating
+    // This ensures the destination marker doesn't disappear when navigation starts
+    if (_selectedRequest != null && _routeDisplayed) {
+      // Check if the selected request is not already in the markers set
+      bool selectedRequestMarkerExists = false;
+      for (var marker in newMarkers) {
+        if (marker.markerId.value == _selectedRequest!.id) {
+          selectedRequestMarkerExists = true;
+          break;
+        }
+      }
+
+      // If the selected request marker doesn't exist in the set, add it
+      if (!selectedRequestMarkerExists) {
+        newMarkers.add(
+          Marker(
+            markerId: MarkerId(_selectedRequest!.id),
+            position: LatLng(_selectedRequest!.location.latitude,
+                _selectedRequest!.location.longitude),
+            icon:
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            infoWindow: InfoWindow(
+              title: 'Destination',
+              snippet: _selectedRequest!.location.placeName ??
+                  'No address available',
+            ),
+          ),
+        );
+      }
     }
 
     setState(() {
@@ -562,18 +670,47 @@ class _SosHomeScreenState extends State<SosHomeScreen> {
       _updateMarkers(requests);
     });
 
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: LatLng(_driverLatitude!, _driverLongitude!),
-        zoom: 14.0,
-      ),
-      myLocationEnabled: true,
-      myLocationButtonEnabled: true,
-      markers: _markers,
-      polylines: Set<Polyline>.of(_polylines.values),
-      onMapCreated: (GoogleMapController controller) {
-        _mapController = controller;
-      },
+    return Stack(
+      children: [
+        GoogleMap(
+          initialCameraPosition: CameraPosition(
+            target: LatLng(_driverLatitude!, _driverLongitude!),
+            zoom: 14.0,
+          ),
+          myLocationEnabled: true,
+          myLocationButtonEnabled: true,
+          markers: _markers,
+          polylines: Set<Polyline>.of(_polylines.values),
+          onMapCreated: (GoogleMapController controller) {
+            _mapController = controller;
+          },
+        ),
+
+        // Show stop navigation button when in navigation mode
+        if (_routeDisplayed)
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: ElevatedButton.icon(
+                onPressed: _stopNavigation,
+                icon: const Icon(Icons.stop_circle_outlined),
+                label: const Text('Stop Navigation'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  elevation: 5,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

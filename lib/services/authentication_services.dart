@@ -8,7 +8,7 @@ class AuthenticationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<UserCredential?> register(String name, String email, String password,
-      String phone, String userType, String? carBrand, String? carModel) async {
+      String phone, String userType) async {
     try {
       UserCredential userCredential =
           await _auth.createUserWithEmailAndPassword(
@@ -23,10 +23,6 @@ class AuthenticationService {
           'email': email,
           'phone': phone,
           'userType': userType,
-          if (userType == 'driver') ...{
-            'carBrand': carBrand,
-            'carModel': carModel,
-          }
         });
         return userCredential;
       }

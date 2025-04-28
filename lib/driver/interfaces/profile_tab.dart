@@ -1,5 +1,7 @@
 // lib/driver/interfaces/profile_tab.dart
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:secure_way_client/authentification/interfaces/login.dart';
 import '../../models/user_model.dart'; // Import UserModel
 import '../../models/car_model.dart'; // Import CarModel
 
@@ -15,12 +17,12 @@ class ProfileTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Profile Information',
+            'Informations du Profil',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
           ListTile(
-            title: const Text('Name'),
+            title: const Text('Nom'),
             subtitle: Text(user?.name ?? 'N/A'),
           ),
           ListTile(
@@ -28,43 +30,27 @@ class ProfileTab extends StatelessWidget {
             subtitle: Text(user?.email ?? 'N/A'),
           ),
           ListTile(
-            title: const Text('Phone'),
+            title: const Text('Téléphone'),
             subtitle: Text(user?.phone ?? 'N/A'),
           ),
-          if (user?.userType == 'driver') ...[
-            const SizedBox(height: 20),
-            const Text(
-              'Car Information',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            ListTile(
-              title: const Text('Car Brand'),
-              subtitle: Text(user?.carBrand ?? 'N/A'),
-            ),
-            ListTile(
-              title: const Text('Car Model'),
-              subtitle: Text(user?.carModel ?? 'N/A'),
-            ),
-          ],
           const SizedBox(height: 20),
           const Text(
-            'Settings',
+            'Paramètres',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
           ListTile(
-            title: const Text('Change User Info'),
+            title: const Text(
+              'Déconnexion',
+              style: TextStyle(color: Colors.red),
+            ),
             trailing: const Icon(Icons.arrow_forward_ios),
-            onTap: () {
-              // TODO: Implement Change User Info
-            },
-          ),
-          ListTile(
-            title: const Text('My Car'),
-            trailing: const Icon(Icons.arrow_forward_ios),
-            onTap: () {
-              // TODO: Implement My Car
+            onTap: () async {
+              await FirebaseAuth.instance.signOut().whenComplete(() {
+                Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => LoginScreen()),
+                    (r) => false);
+              });
             },
           ),
         ],

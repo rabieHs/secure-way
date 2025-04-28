@@ -1,0 +1,2 @@
+/Users/Apple/AndroidStudioProjects/secure_way_client/android/app/.cxx/Debug/51433l4o/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/Apple/AndroidStudioProjects/secure_way_client/android/app/.cxx/Debug/51433l4o/armeabi-v7a/CMakeFiles/rebuild_cache.dir

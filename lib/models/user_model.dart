@@ -7,17 +7,12 @@ class UserModel {
   final String phone;
   final String userType;
 
-  final String? carBrand;
-  final String? carModel;
-
   UserModel({
     required this.uid,
     required this.name,
     required this.email,
     required this.phone,
     required this.userType,
-    this.carBrand,
-    this.carModel,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -27,8 +22,6 @@ class UserModel {
       email: json['email'],
       phone: json['phone'],
       userType: json['userType'],
-      carBrand: json['carBrand'],
-      carModel: json['carModel'],
     );
   }
 
@@ -39,8 +32,6 @@ class UserModel {
       'email': email,
       'phone': phone,
       'userType': userType,
-      'carBrand': carBrand,
-      'carModel': carModel,
     };
   }
 }

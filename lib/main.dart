@@ -11,9 +11,17 @@ import 'driver/interfaces/home_driver.dart';
 import 'models/user_model.dart'; // Import UserModel
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import cloud_firestore
 
+import 'services/notification_service.dart'; // Import NotificationService
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize notification service
+  final notificationService = NotificationService();
+  await notificationService.initialize();
+  await notificationService.requestNotificationPermission();
+
   runApp(MyApp());
 }
 
@@ -21,7 +29,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Secure Way Client',
+      title: 'Client Secure Way',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -58,11 +66,17 @@ class AuthenticationWrapper extends StatelessWidget {
                   String userType = userModel.userType;
                   print('User type: $userType');
                   if (userType == 'driver') {
-                    return DriverHomeScreen();
+                    return DriverHomeScreen(
+                      user: userModel,
+                    );
                   } else if (userType == 'sos') {
-                    return SosHomeScreen();
+                    return SosHomeScreen(
+                      user: userModel,
+                    );
                   } else if (userType == 'mechanic') {
-                    return MechanicHomeScreen();
+                    return MechanicHomeScreen(
+                      user: userModel,
+                    );
                   } else {
                     // Default case or error handling
                     return LoginScreen();

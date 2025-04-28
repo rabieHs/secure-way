@@ -16,8 +16,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _carBrandController = TextEditingController();
-  final TextEditingController _carModelController = TextEditingController();
   String _userType = 'sos';
   final AuthenticationService _authService = AuthenticationService();
 
@@ -27,166 +25,179 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
-    _carBrandController.dispose();
-    _carModelController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Register')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(labelText: 'Name'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your name';
-                  }
-                  return null;
-                },
-              ),
-              TextFormField(
-                controller: _phoneController,
-                decoration: InputDecoration(labelText: 'Phone Number'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your phone number';
-                  }
-                  return null;
-                },
-              ),
-              TextFormField(
-                controller: _emailController,
-                decoration: InputDecoration(labelText: 'Email'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your email';
-                  }
-                  return null;
-                },
-              ),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(labelText: 'Password'),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your password';
-                  }
-                  return null;
-                },
-              ),
-              DropdownButtonFormField<String>(
-                value: _userType,
-                decoration: InputDecoration(labelText: 'User Type'),
-                items: <String>['sos', 'driver', 'mechanic']
-                    .map<DropdownMenuItem<String>>((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _userType = newValue!;
-                  });
-                },
-              ),
-              if (_userType == 'driver') ...[
+    return Container(
+      height: double.infinity,
+      width: double.infinity,
+      decoration: BoxDecoration(
+          image: DecorationImage(
+              fit: BoxFit.cover,
+              image: NetworkImage(
+                  "https://plus.unsplash.com/premium_photo-1664126223770-25311333f721?q=80&w=3687&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"))),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              spacing: 10,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
                 TextFormField(
-                  controller: _carBrandController,
-                  decoration: InputDecoration(labelText: 'Car Brand'),
+                  controller: _nameController,
+                  decoration: InputDecoration(
+                      labelText: 'Nom', fillColor: Colors.white, filled: true),
                   validator: (value) {
-                    if (_userType == 'driver' &&
-                        (value == null || value.isEmpty)) {
-                      return 'Please enter your car brand';
+                    if (value == null || value.isEmpty) {
+                      return 'Veuillez entrer votre nom';
                     }
                     return null;
                   },
                 ),
                 TextFormField(
-                  controller: _carModelController,
-                  decoration: InputDecoration(labelText: 'Car Model'),
+                  controller: _phoneController,
+                  decoration: InputDecoration(
+                      labelText: 'Numéro de téléphone',
+                      fillColor: Colors.white,
+                      filled: true),
                   validator: (value) {
-                    if (_userType == 'driver' &&
-                        (value == null || value.isEmpty)) {
-                      return 'Please enter your car model';
+                    if (value == null || value.isEmpty) {
+                      return 'Veuillez entrer votre numéro de téléphone';
                     }
                     return null;
                   },
                 ),
-              ],
-              SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () async {
-                  if (_formKey.currentState!.validate()) {
-                    String name = _nameController.text.trim();
-                    String email = _emailController.text.trim();
-                    String password = _passwordController.text.trim();
-                    String phone = _phoneController.text.trim();
-                    String? carBrand = _userType == 'driver'
-                        ? _carBrandController.text.trim()
-                        : null;
-                    String? carModel = _userType == 'driver'
-                        ? _carModelController.text.trim()
-                        : null;
+                TextFormField(
+                  controller: _emailController,
+                  decoration: InputDecoration(
+                      labelText: 'Email',
+                      fillColor: Colors.white,
+                      filled: true),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Veuillez entrer votre email';
+                    }
+                    return null;
+                  },
+                ),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                      labelText: 'Mot de passe',
+                      fillColor: Colors.white,
+                      filled: true),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Veuillez entrer votre mot de passe';
+                    }
+                    return null;
+                  },
+                ),
+                DropdownButtonFormField<String>(
+                  value: _userType,
+                  decoration: InputDecoration(
+                      labelText: 'Type d\'utilisateur',
+                      fillColor: Colors.white,
+                      filled: true),
+                  items: <String>['sos', 'driver', 'mechanic']
+                      .map<DropdownMenuItem<String>>((String value) {
+                    String displayText = value;
+                    if (value == 'driver') displayText = 'conducteur';
+                    if (value == 'mechanic') displayText = 'mécanicien';
 
-                    UserCredential? userCredential =
-                        await _authService.register(name, email, password,
-                            phone, _userType, carBrand, carModel);
-                    if (userCredential != null) {
-                      print(
-                          'Registration successful: ${userCredential.user?.email} - Type: $_userType');
-                      if (_userType == 'driver') {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) =>
-                                  DriverHomeScreen(user: null)),
-                          (Route<dynamic> route) => false,
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(displayText),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _userType = newValue!;
+                    });
+                  },
+                ),
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (_formKey.currentState!.validate()) {
+                      String name = _nameController.text.trim();
+                      String email = _emailController.text.trim();
+                      String password = _passwordController.text.trim();
+                      String phone = _phoneController.text.trim();
+
+                      UserCredential? userCredential = await _authService
+                          .register(name, email, password, phone, _userType);
+                      if (userCredential != null) {
+                        print(
+                            'Registration successful: ${userCredential.user?.email} - Type: $_userType');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          // Add success SnackBar
+                          const SnackBar(
+                            content: Text('Inscription réussie !'),
+                            backgroundColor: Colors.green,
+                          ),
                         );
-                      } else if (_userType == 'sos') {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) =>
-                                  const Text('SOS Home Screen')),
-                          (Route<dynamic> route) => false,
-                        );
-                      } else if (_userType == 'mechanic') {
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => MechanicHomeScreen()),
-                          (Route<dynamic> route) => false,
+                        if (_userType == 'driver') {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    DriverHomeScreen(user: null)),
+                            (Route<dynamic> route) => false,
+                          );
+                        } else if (_userType == 'sos') {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    const Text('SOS Home Screen')),
+                            (Route<dynamic> route) => false,
+                          );
+                        } else if (_userType == 'mechanic') {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => MechanicHomeScreen()),
+                            (Route<dynamic> route) => false,
+                          );
+                        }
+                      } else {
+                        print('Registration failed');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          // Add error SnackBar
+                          const SnackBar(
+                            content: Text(
+                                'Échec de l\'inscription. Veuillez réessayer.'),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                       }
-                    } else {
-                      print('Registration failed');
                     }
-                  }
-                },
-                child: Text('Register'),
-              ),
-              SizedBox(height: 20),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => LoginScreen()),
-                    (Route<dynamic> route) => false,
-                  );
-                },
-                child: Text("Already have an account? Login"),
-              ),
-            ],
+                  },
+                  child: Text('S\'inscrire'),
+                ),
+                SizedBox(height: 20),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => LoginScreen()),
+                      (Route<dynamic> route) => false,
+                    );
+                  },
+                  child: Text(
+                    "Vous avez déjà un compte ? Connectez-vous",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

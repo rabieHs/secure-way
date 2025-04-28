@@ -84,7 +84,7 @@ class RequestsTabState extends State<RequestsTab> {
             children: [
               ElevatedButton(
                 onPressed: () => _selectDate(context),
-                child: const Text('Select Date'),
+                child: const Text('Sélectionner une date'),
               ),
               IconButton(
                 icon: Icon(_sortDescending
@@ -113,7 +113,8 @@ class RequestsTabState extends State<RequestsTab> {
                       }
 
                       if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Center(child: Text('No requests found.'));
+                        return const Center(
+                            child: Text('Aucune demande trouvée.'));
                       }
 
                       List<Request> requests = snapshot.data!;
@@ -124,20 +125,33 @@ class RequestsTabState extends State<RequestsTab> {
                           Request request = requests[index];
                           return Card(
                             child: ListTile(
-                              title: Text('Request ID: ${request.id}'),
+                              title: Text('ID de demande: ${request.id}'),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                      'Location: ${request.location.placeName}'),
+                                      'Emplacement: ${request.location.placeName}'),
                                   Text(
-                                      'Time: ${DateFormat('yyyy-MM-dd HH:mm').format(request.time.toDate())}'),
+                                      'Heure: ${DateFormat('yyyy-MM-dd HH:mm').format(request.time.toDate())}'),
                                   Text(
-                                    'Status: ${request.status.name}',
+                                    'Statut: ${_translateStatus(request.status)}',
                                     style: TextStyle(
                                         color: _getStatusColor(request.status)),
                                   ),
-                                  Text('Type: ${request.requestType.name}'),
+                                  Text(
+                                      'Type: ${_translateRequestType(request.requestType)}'),
+                                  // Show car brand and model for mechanic requests
+                                  if (request.requestType ==
+                                      RequestType.mechanic) ...[
+                                    if (request.carBrand != null &&
+                                        request.carBrand!.isNotEmpty)
+                                      Text(
+                                          'Marque de voiture: ${request.carBrand}'),
+                                    if (request.carModel != null &&
+                                        request.carModel!.isNotEmpty)
+                                      Text(
+                                          'Modèle de voiture: ${request.carModel}'),
+                                  ],
                                 ],
                               ),
                             ),
@@ -168,6 +182,32 @@ class RequestsTabState extends State<RequestsTab> {
     }
   }
 
+  String _translateStatus(RequestStatus status) {
+    switch (status) {
+      case RequestStatus.pending:
+        return 'En attente';
+      case RequestStatus.accepted:
+        return 'Accepté';
+      case RequestStatus.rejected:
+        return 'Rejeté';
+      case RequestStatus.completed:
+        return 'Terminé';
+      default:
+        return status.name;
+    }
+  }
+
+  String _translateRequestType(RequestType type) {
+    switch (type) {
+      case RequestType.sos:
+        return 'SOS';
+      case RequestType.mechanic:
+        return 'Mécanicien';
+      default:
+        return type.name;
+    }
+  }
+
   Widget _buildFab() {
     return ExpandableFab(
       distance: 100.0,
@@ -185,33 +225,58 @@ class RequestsTabState extends State<RequestsTab> {
   }
 
   void _showAddRequestDialog(BuildContext context, RequestType requestType) {
+    // Add controllers for car brand and model if it's a mechanic request
+    final TextEditingController carBrandController = TextEditingController();
+    final TextEditingController carModelController = TextEditingController();
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text('Add New Request'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Description'),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _locationController,
-                      decoration: const InputDecoration(labelText: 'Location'),
-                      enabled: false,
-                    ),
+          title: Text(
+              'Ajouter une nouvelle demande de ${_translateRequestType(requestType).toUpperCase()}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _descriptionController,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                  maxLines: 3,
+                ),
+
+                // Only show car brand and model fields for mechanic requests
+                if (requestType == RequestType.mechanic) ...[
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: carBrandController,
+                    decoration:
+                        const InputDecoration(labelText: 'Marque de voiture'),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.location_on),
-                    onPressed: () async {
-                      Position position = await _getCurrentLocation();
-                      if (position != null) {
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: carModelController,
+                    decoration:
+                        const InputDecoration(labelText: 'Modèle de voiture'),
+                  ),
+                ],
+
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _locationController,
+                        decoration:
+                            const InputDecoration(labelText: 'Emplacement'),
+                        enabled: false,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.location_on),
+                      onPressed: () async {
+                        Position position = await _getCurrentLocation();
+                        // Position can't be null, so we don't need to check
                         List<Placemark> placemarks =
                             await placemarkFromCoordinates(
                                 position.latitude, position.longitude);
@@ -219,29 +284,52 @@ class RequestsTabState extends State<RequestsTab> {
                         String placeName =
                             '${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.country}';
                         _locationController.text = placeName;
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ],
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.of(dialogContext).pop();
               },
-              child: const Text('Cancel'),
+              child: const Text('Annuler'),
             ),
             ElevatedButton(
               onPressed: () async {
+                // Store context for later use
+                final scaffoldMessenger = ScaffoldMessenger.of(dialogContext);
+                final navigator = Navigator.of(dialogContext);
+
                 String description = _descriptionController.text.trim();
                 String locationName = _locationController.text.trim();
                 double? latitude = _latitude;
                 double? longitude = _longitude;
 
-                User? currentUser = await _authService
-                    .getCurrentFirebaseUser(); // Updated function name
+                // Get car brand and model for mechanic requests
+                String? carBrand;
+                String? carModel;
+                if (requestType == RequestType.mechanic) {
+                  carBrand = carBrandController.text.trim();
+                  carModel = carModelController.text.trim();
+
+                  // Validate car brand and model for mechanic requests
+                  if (carBrand.isEmpty || carModel.isEmpty) {
+                    scaffoldMessenger.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Veuillez entrer la marque et le modèle de voiture'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                }
+
+                User? currentUser = await _authService.getCurrentFirebaseUser();
                 if (currentUser == null) {
                   // ignore: avoid_print
                   print('No current user found');
@@ -257,18 +345,44 @@ class RequestsTabState extends State<RequestsTab> {
                       requestType: requestType,
                       longitude: longitude,
                       userId: currentUser.uid,
+                      carBrand: carBrand,
+                      carModel: carModel,
                     );
-                    Navigator.of(context).pop();
+
+                    // Close the dialog
+                    navigator.pop();
+
+                    // Show success message
+                    scaffoldMessenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                            'Demande de ${_translateRequestType(requestType).toUpperCase()} soumise avec succès'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
                   } catch (e) {
                     // ignore: avoid_print
                     print('Error saving request: $e');
+                    scaffoldMessenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
                   }
                 } else {
                   // ignore: avoid_print
                   print('Location data is missing');
+                  scaffoldMessenger.showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Veuillez d\'abord obtenir votre position actuelle'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                 }
               },
-              child: const Text('Save'),
+              child: const Text('Enregistrer'),
             ),
           ],
         );

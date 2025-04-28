@@ -16,6 +16,8 @@ class Request {
   final String userId;
   final String description;
   final String? response;
+  final String? carBrand; // Add carBrand
+  final String? carModel; // Add carModel
 
   Request({
     required this.id,
@@ -26,6 +28,8 @@ class Request {
     required this.userId,
     required this.description,
     this.response, // Add response to constructor
+    this.carBrand, // Add carBrand to constructor
+    this.carModel, // Add carModel to constructor
   });
 
   factory Request.fromJson(Map<String, dynamic> json) {
@@ -41,6 +45,8 @@ class Request {
       status: RequestStatus.values.byName(json['status'] as String),
       userId: json['userId'] as String,
       description: json['description'] as String,
+      carBrand: json['carBrand'] as String?, // Add carBrand from JSON
+      carModel: json['carModel'] as String?, // Add carModel from JSON
     );
   }
 
@@ -53,6 +59,8 @@ class Request {
       'status': status.name,
       'userId': userId,
       'description': description,
+      'carBrand': carBrand, // Add carBrand to JSON
+      'carModel': carModel, // Add carModel to JSON
     };
   }
 }

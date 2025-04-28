@@ -9,6 +9,11 @@ plugins {
 }
 
 android {
+    // Enable core library desugaring for flutter_local_notifications
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
         packagingOptions {
         jniLibs {
             excludes.add("**/libVkLayer_khronos_validation.so")
@@ -18,10 +23,11 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
+ compileOptions {
+    coreLibraryDesugaringEnabled true
+    sourceCompatibility JavaVersion.VERSION_1_8
+    targetCompatibility JavaVersion.VERSION_1_8
+}
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_1_8
@@ -49,4 +55,11 @@ android {
 
 flutter {
     source = "../.."
+}
+dependencies {
+    // Add this line
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.2.2'
+    
+    // Your existing dependencies
+    // ...
 }

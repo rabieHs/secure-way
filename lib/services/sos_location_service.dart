@@ -2,10 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:location/location.dart' as lc;
 import 'package:geocoding/geocoding.dart';
 import 'dart:async';
+import '../models/request_model.dart';
+import 'notification_service.dart';
 
 class SosLocationService {
   final lc.Location _locationService = lc.Location();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final NotificationService _notificationService = NotificationService();
   final String _collectionName = 'sos_locations';
 
   lc.LocationData? _currentLocation;
@@ -15,6 +18,12 @@ class SosLocationService {
 
   SosLocationService() {
     _initLocationService();
+    _initNotifications();
+  }
+  
+  Future<void> _initNotifications() async {
+    await _notificationService.initialize();
+    await _notificationService.requestNotificationPermission();
   }
 
   Stream<Map<String, dynamic>> get locationStream =>
@@ -44,16 +53,18 @@ class SosLocationService {
       }
     }
 
-    // Configure location settings
+    // Configure location settings for background updates
     await _locationService.changeSettings(
       accuracy: lc.LocationAccuracy.high,
       interval: 10000, // 10 seconds
-      distanceFilter: 100, // 100 meters
+      distanceFilter: 50, // 50 meters (reduced for more accurate arrival detection)
     );
 
     // Start listening to location updates
     _locationSubscription = _locationService.onLocationChanged.listen(
       (lc.LocationData locationData) async {
+        print('Location update received: ${locationData.latitude}, ${locationData.longitude}');
+        
         if (locationData.latitude != null && locationData.longitude != null) {
           // Get readable address
           String address = await _getAddressFromCoordinates(
@@ -67,12 +78,53 @@ class SosLocationService {
             'longitude': locationData.longitude,
             'address': address,
           });
+
+          // Check for active requests and update status if arrived
+          await _checkAndUpdateRequestStatus(locationData.latitude!, locationData.longitude!);
         }
       },
       onError: (error) {
         print('Location tracking error: $error');
       },
     );
+  }
+
+  Future<void> _checkAndUpdateRequestStatus(double sosLat, double sosLng) async {
+    print('Checking for active requests to update status...');
+    try {
+      // Get all active requests where status is 'accepted'
+      var requestsSnapshot = await FirebaseFirestore.instance
+          .collection('requests')
+          .where('status', isEqualTo: 'accepted')
+          .get();
+
+      for (var doc in requestsSnapshot.docs) {
+        var request = Request.fromJson(doc.data());
+        print('Checking distance for request: ${request.id}');
+
+        // Check if SOS has arrived at destination
+        bool hasArrived = _notificationService.hasArrivedAtDestination(
+          sosLat,
+          sosLng,
+          request.location.latitude,
+          request.location.longitude,
+        );
+
+        if (hasArrived) {
+          print('SOS has arrived at destination for request: ${request.id}');
+          // Update request status to completed
+          await FirebaseFirestore.instance
+              .collection('requests')
+              .doc(request.id)
+              .update({'status': RequestStatus.completed.name});
+
+          // Show notification for status change
+          await _notificationService.showStatusChangeNotification(request);
+        }
+      }
+    } catch (e) {
+      print('Error checking and updating request status: $e');
+    }
   }
 
   Future<String> _getAddressFromCoordinates(
