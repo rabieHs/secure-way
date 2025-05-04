@@ -2,8 +2,6 @@ import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart';
 import '../../services/request_services.dart';
 import '../../services/authentication_services.dart';
@@ -17,12 +15,8 @@ class RequestsTab extends StatefulWidget {
 }
 
 class RequestsTabState extends State<RequestsTab> {
-  final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
   final AuthenticationService _authService = AuthenticationService();
   final RequestService _requestService = RequestService();
-  double? _latitude;
-  double? _longitude;
   DateTime? _selectedDate;
   bool _sortDescending = false;
 
@@ -59,9 +53,7 @@ class RequestsTabState extends State<RequestsTab> {
   }
 
   Stream<List<Request>> _getFilteredRequests() {
-    print("streaming");
     if (_userId == null) {
-      print('No user ID found');
       return const Stream.empty();
     }
 
@@ -77,6 +69,15 @@ class RequestsTabState extends State<RequestsTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Demandes'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+      ),
       body: Column(
         children: [
           Row(
@@ -163,7 +164,6 @@ class RequestsTabState extends State<RequestsTab> {
           ),
         ],
       ),
-      floatingActionButton: _buildFab(),
     );
   }
 
@@ -203,221 +203,7 @@ class RequestsTabState extends State<RequestsTab> {
         return 'SOS';
       case RequestType.mechanic:
         return 'Mécanicien';
-      default:
-        return type.name;
     }
-  }
-
-  Widget _buildFab() {
-    return ExpandableFab(
-      distance: 100.0,
-      children: [
-        ActionButton(
-          onPressed: () => _showAddRequestDialog(context, RequestType.mechanic),
-          icon: const Icon(Icons.car_repair),
-        ),
-        ActionButton(
-          onPressed: () => _showAddRequestDialog(context, RequestType.sos),
-          icon: const Icon(Icons.sos),
-        ),
-      ],
-    );
-  }
-
-  void _showAddRequestDialog(BuildContext context, RequestType requestType) {
-    // Add controllers for car brand and model if it's a mechanic request
-    final TextEditingController carBrandController = TextEditingController();
-    final TextEditingController carModelController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: Text(
-              'Ajouter une nouvelle demande de ${_translateRequestType(requestType).toUpperCase()}'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: _descriptionController,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                  maxLines: 3,
-                ),
-
-                // Only show car brand and model fields for mechanic requests
-                if (requestType == RequestType.mechanic) ...[
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: carBrandController,
-                    decoration:
-                        const InputDecoration(labelText: 'Marque de voiture'),
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: carModelController,
-                    decoration:
-                        const InputDecoration(labelText: 'Modèle de voiture'),
-                  ),
-                ],
-
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _locationController,
-                        decoration:
-                            const InputDecoration(labelText: 'Emplacement'),
-                        enabled: false,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.location_on),
-                      onPressed: () async {
-                        Position position = await _getCurrentLocation();
-                        // Position can't be null, so we don't need to check
-                        List<Placemark> placemarks =
-                            await placemarkFromCoordinates(
-                                position.latitude, position.longitude);
-                        Placemark place = placemarks.first;
-                        String placeName =
-                            '${place.street}, ${place.locality}, ${place.administrativeArea}, ${place.country}';
-                        _locationController.text = placeName;
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                // Store context for later use
-                final scaffoldMessenger = ScaffoldMessenger.of(dialogContext);
-                final navigator = Navigator.of(dialogContext);
-
-                String description = _descriptionController.text.trim();
-                String locationName = _locationController.text.trim();
-                double? latitude = _latitude;
-                double? longitude = _longitude;
-
-                // Get car brand and model for mechanic requests
-                String? carBrand;
-                String? carModel;
-                if (requestType == RequestType.mechanic) {
-                  carBrand = carBrandController.text.trim();
-                  carModel = carModelController.text.trim();
-
-                  // Validate car brand and model for mechanic requests
-                  if (carBrand.isEmpty || carModel.isEmpty) {
-                    scaffoldMessenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            'Veuillez entrer la marque et le modèle de voiture'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                    return;
-                  }
-                }
-
-                User? currentUser = await _authService.getCurrentFirebaseUser();
-                if (currentUser == null) {
-                  // ignore: avoid_print
-                  print('No current user found');
-                  return;
-                }
-
-                if (latitude != null && longitude != null) {
-                  try {
-                    await _requestService.saveRequestToFirebase(
-                      description: description,
-                      locationName: locationName,
-                      latitude: latitude,
-                      requestType: requestType,
-                      longitude: longitude,
-                      userId: currentUser.uid,
-                      carBrand: carBrand,
-                      carModel: carModel,
-                    );
-
-                    // Close the dialog
-                    navigator.pop();
-
-                    // Show success message
-                    scaffoldMessenger.showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            'Demande de ${_translateRequestType(requestType).toUpperCase()} soumise avec succès'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  } catch (e) {
-                    // ignore: avoid_print
-                    print('Error saving request: $e');
-                    scaffoldMessenger.showSnackBar(
-                      SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                } else {
-                  // ignore: avoid_print
-                  print('Location data is missing');
-                  scaffoldMessenger.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'Veuillez d\'abord obtenir votre position actuelle'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              child: const Text('Enregistrer'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<Position> _getCurrentLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return Future.error('Location services are disabled.');
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return Future.error('Location permissions are denied');
-      }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      return Future.error(
-          'Location permissions are permanently denied, we cannot request permissions.');
-    }
-
-    Position position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _latitude = position.latitude;
-      _longitude = position.longitude;
-    });
-    return position;
   }
 }
 

@@ -189,6 +189,26 @@ class _MechanicHomeScreenState extends State<MechanicHomeScreen> {
 
   // Stop navigation mode and clear polylines
   void _stopNavigation() {
+    // Store the request ID before clearing it
+    String? requestId;
+    if (_selectedRequest != null) {
+      requestId = _selectedRequest!.id;
+
+      // Update request status back to pending if it was accepted
+      if (_selectedRequest!.status == RequestStatus.accepted) {
+        _requestService.updateRequestStatus(requestId, RequestStatus.pending);
+
+        // Show notification to the user
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Navigation stopped. Request returned to pending status.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+
     setState(() {
       _routeDisplayed = false;
       _polylines.clear();

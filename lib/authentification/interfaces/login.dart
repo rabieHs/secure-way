@@ -43,6 +43,44 @@ class _LoginScreenState extends State<LoginScreen> {
               spacing: 10,
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
+                // SOS Logo
+                Container(
+                  width: 150,
+                  height: 150,
+                  margin: const EdgeInsets.only(bottom: 30),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 15,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(
+                          Icons.car_repair,
+                          size: 60,
+                          color: Colors.red,
+                        ),
+                        SizedBox(height: 10),
+                        Text(
+                          'SOS',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 TextFormField(
                   controller: _emailController,
                   decoration: InputDecoration(
